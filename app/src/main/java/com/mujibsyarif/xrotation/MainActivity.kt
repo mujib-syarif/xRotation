@@ -40,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -99,10 +103,28 @@ fun XRotationApp() {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var needsOverlay by remember { mutableStateOf(false) }
 
+    // Polling hanya berjalan saat layar aplikasi terlihat (STARTED), bukan di latar.
+    val lifecycleOwner = ctx as? LifecycleOwner
+    var started by remember {
+        mutableStateOf(lifecycleOwner?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) ?: true)
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) started = true
+            else if (event == Lifecycle.Event.ON_STOP) started = false
+        }
+        lifecycleOwner?.lifecycle?.addObserver(observer)
+        onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
+    }
+
     LaunchedEffect(Unit) {
         if (Prefs.isEnabled(ctx)) {
             if (Settings.canDrawOverlays(ctx)) RotationService.start(ctx) else Prefs.setEnabled(ctx, false)
         }
+    }
+
+    LaunchedEffect(started) {
+        if (!started) return@LaunchedEffect
         while (true) {
             enabled = Prefs.isEnabled(ctx)
             mode = Prefs.mode(ctx)

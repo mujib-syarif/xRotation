@@ -30,10 +30,11 @@ object Prefs {
     fun setMode(c: Context, mode: Mode) {
         val key = dayKey()
         val sp = sp(c)
-        sp.edit()
-            .putInt("mode", mode.id)
-            .putInt(key, sp.getInt(key, 0) + 1)
-            .apply()
+        // Hitung hanya saat mode benar-benar berganti, bukan tiap memilih mode yang sama.
+        val changed = sp.getInt("mode", 0) != mode.id
+        val e = sp.edit().putInt("mode", mode.id)
+        if (changed) e.putInt(key, sp.getInt(key, 0) + 1)
+        e.apply()
     }
 
     fun startedAt(c: Context): Long = sp(c).getLong("startedAt", 0L)
