@@ -33,18 +33,35 @@ class RotationService : Service() {
             return START_NOT_STICKY
         }
 
-        startAsForeground()
-
-        if (!Prefs.isEnabled(this) || !Settings.canDrawOverlays(this)) {
+        // Mulai di latar depan dulu (wajib setelah startForegroundService); bisa ditolak sistem
+        // (mis. ForegroundServiceStartNotAllowedException di Android 12+).
+        if (!startAsForeground()) {
+            Prefs.setEnabled(this, false)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        applyMode(Prefs.mode(this))
+        if (!Settings.canDrawOverlays(this)) {
+            // Izin overlay dicabut: samakan status supaya tampilan tidak menunjukkan "aktif".
+            Prefs.setEnabled(this, false)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!Prefs.isEnabled(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        if (!applyMode(Prefs.mode(this))) {
+            Prefs.setEnabled(this, false)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         return START_STICKY
     }
 
-    private fun applyMode(mode: Mode) {
+    /** Mengembalikan false bila jendela overlay gagal dipasang/diperbarui (mis. izin dicabut). */
+    private fun applyMode(mode: Mode): Boolean {
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val params = WindowManager.LayoutParams(
             1,
@@ -57,13 +74,20 @@ class RotationService : Service() {
         )
         params.screenOrientation = mode.orientation
 
-        val existing = overlay
-        if (existing == null) {
-            val v = View(this)
-            wm.addView(v, params)
-            overlay = v
-        } else {
-            wm.updateViewLayout(existing, params)
+        return try {
+            val existing = overlay
+            if (existing == null) {
+                val v = View(this)
+                wm.addView(v, params)
+                overlay = v
+            } else {
+                wm.updateViewLayout(existing, params)
+            }
+            true
+        } catch (_: Exception) {
+            // BadTokenException / SecurityException / IllegalArgumentException.
+            removeOverlay()
+            false
         }
     }
 
@@ -77,7 +101,7 @@ class RotationService : Service() {
         overlay = null
     }
 
-    private fun startAsForeground() {
+    private fun startAsForeground(): Boolean {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Layanan xRotation", NotificationManager.IMPORTANCE_LOW),
@@ -108,10 +132,15 @@ class RotationService : Service() {
             )
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIF_ID, notification)
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(NOTIF_ID, notification)
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
