@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,6 +60,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -157,7 +161,10 @@ fun XRotationApp() {
     }
 
     fun pick(m: Mode) {
-        if (!enabled) return
+        if (!enabled) {
+            Toast.makeText(ctx, "Aktifkan layanan dulu untuk mengganti orientasi", Toast.LENGTH_SHORT).show()
+            return
+        }
         Prefs.setMode(ctx, m)
         mode = m
         count = Prefs.todayCount(ctx)
@@ -312,10 +319,16 @@ private fun XSwitch(on: Boolean, onClick: () -> Unit) {
     val x by animateDpAsState(if (on) 25.dp else 3.dp, label = "knob")
     Box(
         Modifier
-            .size(52.dp, 30.dp)
+            .clickable(role = Role.Switch, onClick = onClick)
+            .semantics {
+                contentDescription = "Layanan xRotation"
+                stateDescription = if (on) "Aktif" else "Mati"
+            }
+            // Area sentuh 48dp tinggi; visual tetap 52x30dp.
+            .size(52.dp, 48.dp)
+            .padding(vertical = 9.dp)
             .clip(RoundedCornerShape(15.dp))
-            .background(if (on) Ink else Color.White.copy(alpha = 0.2f))
-            .clickable(role = Role.Switch, onClick = onClick),
+            .background(if (on) Ink else Color.White.copy(alpha = 0.2f)),
     ) {
         Box(
             Modifier
